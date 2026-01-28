@@ -1,0 +1,93 @@
+version: 2
+
+models:
+
+  # -------------------------------------------------
+  # STAGING MODELS
+  # -------------------------------------------------
+
+  - name: stg_orders
+    description: >
+      Lightweight staging model built on TPCH SF1 ORDERS.
+      Intentionally simple to demonstrate over-provisioned workloads.
+    columns:
+      - name: order_id
+        description: "Primary order identifier"
+        tests:
+          - not_null
+          - unique
+
+      - name: order_amount
+        description: "Total order amount"
+
+      - name: order_date
+        description: "Order date"
+
+  - name: dim_customers_sort
+    description: >
+      Customer dimension model with ORDER BY on text column.
+      Designed to simulate mild memory spillage on small warehouses.
+    columns:
+      - name: c_custkey
+        description: "Customer primary key"
+        tests:
+          - not_null
+
+      - name: c_name
+        description: "Customer name"
+
+  # -------------------------------------------------
+  # FACT / MART MODELS
+  # -------------------------------------------------
+
+  - name: fct_lineitem_heavy
+    description: >
+      Heavy fact model on TPCH SF10 LINEITEM with ORDER BY on large text column.
+      Intentionally causes disk spillage on undersized warehouses.
+    columns:
+      - name: l_orderkey
+        description: "Order key"
+        tests:
+          - not_null
+
+      - name: l_extendedprice
+        description: "Extended line item price"
+
+  - name: fct_orders_join
+    description: >
+      Fact model joining ORDERS, CUSTOMER, and LINEITEM.
+      Designed to create hash join memory pressure and spillage.
+    columns:
+      - name: o_orderkey
+        description: "Order identifier"
+        tests:
+          - not_null
+
+      - name: total_revenue
+        description: "Aggregated revenue per order"
+
+  - name: fct_window_spill
+    description: >
+      Fact model using window functions over large datasets.
+      Simulates window-function memory spill on small warehouses.
+    columns:
+      - name: l_partkey
+        description: "Part identifier"
+        tests:
+          - not_null
+
+      - name: running_revenue
+        description: "Running revenue by part"
+
+  - name: agg_revenue_optimal
+    description: >
+      Aggregated revenue model intentionally run on a right-sized warehouse.
+      Serves as a control case with no spillage.
+    columns:
+      - name: l_partkey
+        description: "Part identifier"
+        tests:
+          - not_null
+
+      - name: total_revenue
+        description: "Total revenue per part"
