@@ -5,57 +5,70 @@
 }}
 -- dbt_model: fct_remote_spill_sample_data
 
--- Purpose:
--- Force REMOTE_SPILL using TPCH_SF100 by:
--- 1. Large table scan
--- 2. Join before aggregation
--- 3. Low selectivity filters
--- 4. No clustering
--- 5. Small warehouse
+-- PURPOSE:
+-- Force REMOTE_SPILL by exhausting:
+-- 1. Memory
+-- 2. Local SSD
+-- Result: disk-based shuffle → REMOTE_SPILL
 
-WITH large_lineitems AS (
+WITH base_lineitem AS (
 
     SELECT
         l_orderkey,
         l_partkey,
         l_suppkey,
         l_extendedprice,
-        l_shipdate
+        l_quantity
     FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF100.LINEITEM
-    -- BAD filter: scans most partitions
-    WHERE l_shipdate >= DATE '1992-01-01'
+    -- intentionally NO selective filter
 
 ),
 
-large_orders AS (
+base_orders AS (
 
     SELECT
         o_orderkey,
         o_custkey,
-        o_orderdate,
         o_totalprice
     FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF100.ORDERS
 
 ),
 
-joined_data AS (
+exploded_join AS (
 
     SELECT
-        o.o_orderdate,
+        o.o_custkey,
         l.l_partkey,
         l.l_suppkey,
-        SUM(l.l_extendedprice) AS revenue
-    FROM large_lineitems l
-    JOIN large_orders o
+        l.l_orderkey,
+        l.l_extendedprice * l.l_quantity AS line_value
+    FROM base_lineitem l
+    JOIN base_orders o
       ON l.l_orderkey = o.o_orderkey
+
+),
+
+heavy_aggregation AS (
+
+    SELECT
+        o_custkey,
+        l_partkey,
+        l_suppkey,
+        COUNT(*)                         AS row_cnt,
+        SUM(line_value)                  AS total_value,
+        AVG(line_value)                  AS avg_value,
+        STDDEV(line_value)               AS stddev_value
+    FROM exploded_join
     GROUP BY
-        o.o_orderdate,
-        l.l_partkey,
-        l.l_suppkey
+        o_custkey,
+        l_partkey,
+        l_suppkey
 
 )
 
 SELECT *
-FROM joined_data
--- Another low-selectivity predicate
-WHERE o_orderdate >= DATE '1995-01-01'
+FROM heavy_aggregation
+ORDER BY
+    o_custkey,
+    l_partkey,
+    total_value DESC
