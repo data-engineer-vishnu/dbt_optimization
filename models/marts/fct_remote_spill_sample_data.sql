@@ -58,4 +58,4 @@ joined_data AS (
 SELECT *
 FROM joined_data
 -- Another low-selectivity predicate
-WHERE o_orderdate >= DATE '1995-01-01';
+WHERE o_orderdate >= DATE '1995-01-01'
