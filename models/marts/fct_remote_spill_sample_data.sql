@@ -5,47 +5,57 @@
 }}
 -- dbt_model: fct_remote_spill_sample_data
 
-WITH large_sales AS (
+-- Purpose:
+-- Force REMOTE_SPILL using TPCH_SF100 by:
+-- 1. Large table scan
+-- 2. Join before aggregation
+-- 3. Low selectivity filters
+-- 4. No clustering
+-- 5. Small warehouse
+
+WITH large_lineitems AS (
 
     SELECT
-        ss_sold_date_sk,
-        ss_customer_sk,
-        ss_store_sk,
-        ss_ext_sales_price
-    FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.STORE_SALES
-    -- Intentionally low-selectivity filter (forces wide scan)
-    WHERE ss_sold_date_sk >= 2450816  -- ~1998
+        l_orderkey,
+        l_partkey,
+        l_suppkey,
+        l_extendedprice,
+        l_shipdate
+    FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF100.LINEITEM
+    -- BAD filter: scans most partitions
+    WHERE l_shipdate >= DATE '1992-01-01'
 
 ),
 
-customers AS (
+large_orders AS (
 
     SELECT
-        c_customer_sk,
-        c_current_country,
-        c_birth_year
-    FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.CUSTOMER
+        o_orderkey,
+        o_custkey,
+        o_orderdate,
+        o_totalprice
+    FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF100.ORDERS
 
 ),
 
 joined_data AS (
 
     SELECT
-        s.ss_sold_date_sk,
-        c.c_current_country,
-        c.c_birth_year,
-        SUM(s.ss_ext_sales_price) AS total_revenue
-    FROM large_sales s
-    JOIN customers c
-      ON s.ss_customer_sk = c.c_customer_sk
+        o.o_orderdate,
+        l.l_partkey,
+        l.l_suppkey,
+        SUM(l.l_extendedprice) AS revenue
+    FROM large_lineitems l
+    JOIN large_orders o
+      ON l.l_orderkey = o.o_orderkey
     GROUP BY
-        s.ss_sold_date_sk,
-        c.c_current_country,
-        c.c_birth_year
+        o.o_orderdate,
+        l.l_partkey,
+        l.l_suppkey
 
 )
 
 SELECT *
 FROM joined_data
--- Another low-selectivity predicate → poor pruning
-WHERE c_current_country IN ('UNITED STATES', 'INDIA', 'CANADA', 'UNITED KINGDOM')
+-- Another low-selectivity predicate
+WHERE o_orderdate >= DATE '1995-01-01';
