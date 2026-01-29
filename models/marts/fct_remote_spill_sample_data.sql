@@ -48,4 +48,4 @@ joined_data AS (
 SELECT *
 FROM joined_data
 -- Another low-selectivity predicate → poor pruning
-WHERE c_current_country IN ('UNITED STATES', 'INDIA', 'CANADA', 'UNITED KINGDOM');
+WHERE c_current_country IN ('UNITED STATES', 'INDIA', 'CANADA', 'UNITED KINGDOM')
