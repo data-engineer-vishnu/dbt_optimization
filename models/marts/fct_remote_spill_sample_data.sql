@@ -1,6 +1,9 @@
 {{ 
   config(
-    materialized='table'
+    materialized='table',
+    snowflake_warehouse='FINOPS_WH',
+    pre_hook="ALTER WAREHOUSE FINOPS_WH SET WAREHOUSE_SIZE = 'XSMALL'",
+    post_hook="ALTER WAREHOUSE FINOPS_WH SET WAREHOUSE_SIZE = 'LARGE'"
   ) 
 }}
 -- dbt_model: fct_remote_spill_sample_data
